@@ -1,7 +1,10 @@
 package product
 
+import "github.com/google/uuid"
+
 type Product struct {
-	ID    int    `json:"id"`
-	Name  string `json:"name"`
-	Price int64  `json:"price"`
+	ID    uuid.UUID `json:"id"`
+	Name  string    `json:"name"`
+	Price float64   `json:"price"`
+	Stock int       `json:"stock"`
 }

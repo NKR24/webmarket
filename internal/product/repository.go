@@ -2,6 +2,10 @@ package product
 
 import (
 	"database/sql"
+	"log"
+
+	"github.com/google/uuid"
+	_ "github.com/lib/pq"
 )
 
 type Repository struct {
@@ -9,25 +13,35 @@ type Repository struct {
 }
 
 func NewRepository(db *sql.DB) *Repository {
-	return &Repository{db: db}
+	return &Repository{
+		db: db,
+	}
 }
 
-func (r *Repository) CreatePruduct(product Product) error {
-	query := `INSERT INTO products (name, price) VALUES ($1, $2) RETURNING id`
-	return r.db.QueryRow(query, product.Name, product.Price).Scan(&product.ID)
+func (r *Repository) CreateProduct(p *Product) (uuid.UUID, error) {
+	p.ID = uuid.New()
+	query := `INSERT INTO products (name, price, stock) VALUES ($1, $2, $3) RETURNING id`
+	err := r.db.QueryRow(query, p.Name, p.Price, p.Stock).Scan(&p.ID)
+	if err != nil {
+		log.Printf("Error executing query: %v", err)
+		return p.ID, err
+	}
+	return p.ID, nil
 }
 
 func (r *Repository) GetAll() ([]Product, error) {
-	rows, err := r.db.Query("SELECT * FROM products")
+	var products []Product
+	query := "SELECT id, name, price, stock FROM products"
+	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	products := make([]Product, 3, 6)
 	for rows.Next() {
 		product := new(Product)
-		if err := rows.Scan(&product.ID, &product.Name, &product.Price); err != nil {
+		err := rows.Scan(&product.ID, &product.Name, &product.Price, &product.Stock)
+		if err != nil {
 			return nil, err
 		}
 		products = append(products, *product)
@@ -35,21 +49,24 @@ func (r *Repository) GetAll() ([]Product, error) {
 	return products, nil
 }
 
-func (r *Repository) GetById(id int) (*Product, error) {
+func (r *Repository) GetById(id uuid.UUID) (*Product, error) {
 	product := new(Product)
-	err := r.db.QueryRow("SELECT id, name, price FROM products WHERE id = $1", id).Scan(&product.ID, &product.Name, &product.Price)
+	query := `SELECT id, name, price, stock FROM products WHERE id = $1`
+	err := r.db.QueryRow(query, id).Scan(&product.ID, &product.Name, &product.Price, &product.Stock)
 	if err != nil {
 		return nil, err
 	}
 	return product, nil
 }
 
-func (r *Repository) Update(product *Product) error {
-	_, err := r.db.Exec("UPDATE products SET name = $1, price = $2 WHERE id = $3", product.Name, product.Price, product.ID)
+func (r *Repository) Update(id uuid.UUID, p *Product) error {
+	query := `UPDATE products SET name = $1, price = $2, stock = $3  WHERE id = $4`
+	_, err := r.db.Exec(query, p.Name, p.Price, p.Stock, id)
 	return err
 }
 
-func (r *Repository) Delete(id int) error {
-	_, err := r.db.Exec("DELETE FROM products WHERE id = $1", id)
+func (r *Repository) Delete(id uuid.UUID) error {
+	query := `DELETE FROM products WHERE id = $1`
+	_, err := r.db.Exec(query, id)
 	return err
 }

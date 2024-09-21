@@ -2,103 +2,86 @@ package product
 
 import (
 	"database/sql"
-	"encoding/json"
+	"log"
 	"net/http"
-	"strconv"
 
-	"github.com/gorilla/mux"
+	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
+	_ "github.com/lib/pq"
 )
 
 type Handler struct {
-	repo  *Repository
-	kafka *KafkaProducer
+	repo *Repository
 }
 
-func NewHandler(db *sql.DB, kafka *KafkaProducer) *Handler {
+func NewHandler(db *sql.DB) *Handler {
 	return &Handler{
-		repo:  NewRepository(db),
-		kafka: kafka,
+		repo: NewRepository(db),
 	}
 }
 
-func (h *Handler) CreateProduct(w http.ResponseWriter, r *http.Request) {
-	var product Product
-	if err := json.NewDecoder(r.Body).Decode(&product); err != nil {
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
-		return
+func (h *Handler) CreateNewProduct(c echo.Context) error {
+	product := new(Product)
+	if err := c.Bind(&product); err != nil {
+		return err
 	}
-
-	if err := h.repo.CreatePruduct(product); err != nil {
-		http.Error(w, "Failed to create product", http.StatusInternalServerError)
-		return
+	if _, err := h.repo.CreateProduct(product); err != nil {
+		return err
 	}
-
-	h.kafka.SendProductMessage(&product)
-
-	json.NewEncoder(w).Encode(product)
+	return c.JSON(
+		http.StatusOK,
+		product.ID,
+	)
 }
 
-func (h *Handler) GetAllProducts(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetAllProducts(c echo.Context) error {
 	products, err := h.repo.GetAll()
 	if err != nil {
-		http.Error(w, "Failed to fetch products", http.StatusInternalServerError)
-		return
+		return c.JSON(http.StatusInternalServerError, err)
 	}
-
-	json.NewEncoder(w).Encode(products)
+	return c.JSON(http.StatusOK, products)
 }
 
-func (h *Handler) GetProductByID(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(mux.Vars(r)["id"])
+func (h *Handler) GetProductById(c echo.Context) error {
+	id, err := uuid.Parse(c.Param("id"))
+	log.Printf("id %s", id)
 	if err != nil {
-		http.Error(w, "Invalid product ID", http.StatusBadRequest)
-		return
+		return c.JSON(http.StatusInternalServerError, err)
 	}
-
 	product, err := h.repo.GetById(id)
 	if err != nil {
-		http.Error(w, "Product not found", http.StatusNotFound)
-		return
+		return c.JSON(http.StatusInternalServerError, err)
 	}
-
-	json.NewEncoder(w).Encode(product)
+	return c.JSON(http.StatusOK, product)
 }
 
-func (h *Handler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(mux.Vars(r)["id"])
+func (h *Handler) UpdateProductById(c echo.Context) error {
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		http.Error(w, "Invalid product ID", http.StatusBadRequest)
-		return
+		return c.JSON(http.StatusInternalServerError, err)
 	}
-
 	product := new(Product)
-	if err := json.NewDecoder(r.Body).Decode(&product); err != nil {
-		http.Error(w, "Invalid request payload", http.StatusBadRequest)
-		return
+	if err := c.Bind(&product); err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
 	}
 
 	product.ID = id
-	if err := h.repo.Update(product); err != nil {
-		http.Error(w, "Failed to update product", http.StatusInternalServerError)
-		return
+
+	err = h.repo.Update(id, product)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
 	}
-
-	h.kafka.SendProductMessage(product)
-
-	json.NewEncoder(w).Encode(product)
+	return c.JSON(http.StatusOK, product)
 }
 
-func (h *Handler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(mux.Vars(r)["id"])
+func (h *Handler) DeleteProductById(c echo.Context) error {
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		http.Error(w, "Invalid product ID", http.StatusBadRequest)
-		return
+		return c.JSON(http.StatusInternalServerError, err)
 	}
-
-	if err := h.repo.Delete(id); err != nil {
-		http.Error(w, "Failed to delete product", http.StatusInternalServerError)
-		return
+	err = h.repo.Delete(id)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
 	}
-
-	w.WriteHeader(http.StatusNoContent)
+	return c.JSON(http.StatusOK, "Sucessfuly Deleted!")
 }
