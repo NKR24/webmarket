@@ -24,7 +24,15 @@ func main() {
 	}
 	defer db.Close()
 
-	handler := product.NewHandler(db)
+	kafkaWriter := product.NewKafkaWriter(cfg.KafkaBrokers, cfg.KafkaTopic, 1)
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	repo := product.NewRepository(db)
+
+	handler := product.NewHandler(repo, kafkaWriter)
+
 	e := echo.New()
 	e.Use(middleware.CORS())
 	e.Use(middleware.Logger())
@@ -33,5 +41,5 @@ func main() {
 	e.GET("/product/:id", handler.GetProductById)
 	e.PUT("product/update/:id", handler.UpdateProductById)
 	e.DELETE("product/delete/:id", handler.DeleteProductById)
-	e.Logger.Fatal(e.Start(":8080"))
+	e.Logger.Fatal(e.Start(":9090"))
 }

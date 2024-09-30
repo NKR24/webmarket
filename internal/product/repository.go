@@ -1,8 +1,8 @@
 package product
 
 import (
+	"context"
 	"database/sql"
-	"log"
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -20,18 +20,17 @@ func NewRepository(db *sql.DB) *Repository {
 
 func (r *Repository) CreateProduct(p *Product) (uuid.UUID, error) {
 	p.ID = uuid.New()
-	query := `INSERT INTO products (name, price, stock) VALUES ($1, $2, $3) RETURNING id`
+	const query = `INSERT INTO products (name, price, stock) VALUES ($1, $2, $3) RETURNING id`
 	err := r.db.QueryRow(query, p.Name, p.Price, p.Stock).Scan(&p.ID)
 	if err != nil {
-		log.Printf("Error executing query: %v", err)
 		return p.ID, err
 	}
 	return p.ID, nil
 }
 
-func (r *Repository) GetAll() ([]Product, error) {
+func (r *Repository) GetAll(ctx context.Context) ([]Product, error) {
 	var products []Product
-	query := "SELECT id, name, price, stock FROM products"
+	const query = "SELECT id, name, price, stock FROM products"
 	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err
@@ -51,7 +50,7 @@ func (r *Repository) GetAll() ([]Product, error) {
 
 func (r *Repository) GetById(id uuid.UUID) (*Product, error) {
 	product := new(Product)
-	query := `SELECT id, name, price, stock FROM products WHERE id = $1`
+	const query = `SELECT id, name, price, stock FROM products WHERE id = $1`
 	err := r.db.QueryRow(query, id).Scan(&product.ID, &product.Name, &product.Price, &product.Stock)
 	if err != nil {
 		return nil, err
@@ -60,13 +59,13 @@ func (r *Repository) GetById(id uuid.UUID) (*Product, error) {
 }
 
 func (r *Repository) Update(id uuid.UUID, p *Product) error {
-	query := `UPDATE products SET name = $1, price = $2, stock = $3  WHERE id = $4`
+	const query = `UPDATE products SET name = $1, price = $2, stock = $3  WHERE id = $4`
 	_, err := r.db.Exec(query, p.Name, p.Price, p.Stock, id)
 	return err
 }
 
 func (r *Repository) Delete(id uuid.UUID) error {
-	query := `DELETE FROM products WHERE id = $1`
+	const query = `DELETE FROM products WHERE id = $1`
 	_, err := r.db.Exec(query, id)
 	return err
 }

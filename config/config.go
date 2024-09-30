@@ -11,6 +11,7 @@ type Config struct {
 	DBPassword   string
 	DBName       string
 	KafkaBrokers string
+	KafkaTopic   string
 	ElasticHost  string
 }
 
@@ -27,6 +28,7 @@ func LoadConfig() (*Config, error) {
 		DBPassword:   viper.GetString("DB_PASSWORD"),
 		DBName:       viper.GetString("DB_NAME"),
 		KafkaBrokers: viper.GetString("KAFKA_BROKERS"),
+		KafkaTopic:   viper.GetString("KAFKA_TOPIC"),
 		ElasticHost:  viper.GetString("ELASTIC_HOST"),
 	}
 
