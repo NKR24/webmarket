@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"shop/internal/elastic"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -14,12 +15,14 @@ import (
 type Handler struct {
 	repo Repositer
 	kw   *KafkaWriter
+	es   *elastic.ElsaticClient
 }
 
-func NewHandler(repo Repositer, kw *KafkaWriter) *Handler {
+func NewHandler(repo Repositer, kw *KafkaWriter, es *elastic.ElsaticClient) *Handler {
 	return &Handler{
 		repo: repo,
 		kw:   kw,
+		es:   es,
 	}
 }
 
@@ -36,8 +39,12 @@ func (h *Handler) CreateNewProduct(c echo.Context) error {
 	}
 
 	if err := h.kw.SendMessage(product); err != nil {
-		log.Printf("Error to send message to kafka: %v", err)
+		log.Printf("Failed to send message")
 		return err
+	}
+
+	if err := h.es.IndexProduct("products", product.ID.String(), product); err != nil {
+		return c.JSON(http.StatusInternalServerError, "Failed to index product in Elasticsearch")
 	}
 
 	return c.JSON(
@@ -84,6 +91,16 @@ func (h *Handler) UpdateProductById(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
+
+	if err := h.kw.SendMessage(product); err != nil {
+		log.Printf("Failed to send message")
+		return err
+	}
+
+	if err := h.es.IndexProduct("products", product.ID.String(), product); err != nil {
+		return c.JSON(http.StatusInternalServerError, "Failed to index product in Elasticsearch")
+	}
+
 	return c.JSON(http.StatusOK, product)
 }
 
@@ -96,5 +113,11 @@ func (h *Handler) DeleteProductById(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, err)
 	}
+
+	err = h.es.DeleteProduct("products", id.String())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
 	return c.JSON(http.StatusOK, "Sucessfuly Deleted!")
 }
