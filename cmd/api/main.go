@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"log"
 	"shop/config"
+	"shop/internal/elastic"
 	"shop/internal/product"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -24,14 +26,24 @@ func main() {
 	}
 	defer db.Close()
 
-	kafkaWriter := product.NewKafkaWriter(cfg.KafkaBrokers, cfg.KafkaTopic, 1)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	kafkaWriter, err := product.NewKafkaWriter(cfg.KafkaBrokers, cfg.KafkaTopic)
+	if err != nil {
+		panic(err)
+	}
+
+	time.AfterFunc(10*time.Second, func() {
+		if err = kafkaWriter.CreateKafkaTopic("kafka:29092", "products", 1); err != nil {
+			panic(err)
+		}
+	})
+
+	es, err := elastic.NewElasticClient(cfg.ElasticHost)
+	if err != nil {
+		log.Fatalf("Error creating Elasticsearch client: %v", err)
+	}
 
 	repo := product.NewRepository(db)
-
-	handler := product.NewHandler(repo, kafkaWriter)
+	handler := product.NewHandler(repo, kafkaWriter, es)
 
 	e := echo.New()
 	e.Use(middleware.CORS())
